@@ -1,6 +1,9 @@
 import{mkdirSync,readdirSync,readFileSync,writeFileSync}from'node:fs';
 import{join}from'node:path';
 const T="!5e\"*+/0        '''''''&'''&''' '''             ABBA!           &#              \"\"%\"";
+// Decode the opcode table once at load: immediate length (-1 = no such opcode), pops, pushes.
+const IM=new Int8Array(256),PO=new Int8Array(256),PU=new Int8Array(256);
+for(let i=0;i<256;i++){const t=(T.charCodeAt(i)||0)-33;IM[i]=t<0?-1:t>>4;PO[i]=t&3;PU[i]=(t>>2)&3;}
 function run(p,q){
  const D=new Int32Array(256),C=new Int32Array(64),M=new Int32Array(256),o=new Uint8Array(65536);
  let s=0,c=0,pc=0,st=0,ip=0,ol=0;
@@ -8,9 +11,9 @@ function run(p,q){
  for(;;){
   if(st===1e6)return F(10);
   if(pc<0||pc>=p.length)return F(9);
-  const b=p[pc],t=(T.charCodeAt(b)||0)-33;
-  if(t<0)return F(5);
-  const im=t>>4,po=t&3,pu=(t>>2)&3;
+  const b=p[pc],im=IM[b];
+  if(im<0)return F(5);
+  const po=PO[b],pu=PU[b];
   if(pc+im>=p.length)return F(9);
   st++;
   const nx=pc+1+im;
@@ -19,22 +22,24 @@ function run(p,q){
   pc=nx;
   if(b>=0x10&&b<=0x22&&b!==0x17&&b!==0x1b){
    const y=D[s-1],x=D[s-2];let r;
-   if(b===0x10)r=(x+y)|0;
-   else if(b===0x11)r=(x-y)|0;
-   else if(b===0x12)r=Math.imul(x,y);
-   else if(b===0x13){if(!y)return F(4);r=x===-2147483648&&y===-1?x:(x/y)|0;}
-   else if(b===0x14){if(!y)return F(4);r=y===-1?0:x%y|0;}
-   else if(b===0x15){if(!y)return F(4);r=Math.floor((x>>>0)/(y>>>0))|0;}
-   else if(b===0x16){if(!y)return F(4);r=(x>>>0)%(y>>>0)|0;}
-   else if(b===0x18)r=x&y;
-   else if(b===0x19)r=x|y;
-   else if(b===0x1a)r=x^y;
-   else if(b===0x1c)r=x<<(y&31);
-   else if(b===0x1d)r=x>>(y&31);
-   else if(b===0x1e)r=(x>>>(y&31))|0;
-   else if(b===0x20)r=x===y?1:0;
-   else if(b===0x21)r=x<y?1:0;
-   else r=(x>>>0)<(y>>>0)?1:0;
+   switch(b){
+    case 0x10:r=(x+y)|0;break;
+    case 0x11:r=(x-y)|0;break;
+    case 0x12:r=Math.imul(x,y);break;
+    case 0x13:{if(!y)return F(4);r=x===-2147483648&&y===-1?x:(x/y)|0;break;}
+    case 0x14:{if(!y)return F(4);r=y===-1?0:x%y|0;break;}
+    case 0x15:{if(!y)return F(4);r=Math.floor((x>>>0)/(y>>>0))|0;break;}
+    case 0x16:{if(!y)return F(4);r=(x>>>0)%(y>>>0)|0;break;}
+    case 0x18:r=x&y;break;
+    case 0x19:r=x|y;break;
+    case 0x1a:r=x^y;break;
+    case 0x1c:r=x<<(y&31);break;
+    case 0x1d:r=x>>(y&31);break;
+    case 0x1e:r=(x>>>(y&31))|0;break;
+    case 0x20:r=x===y?1:0;break;
+    case 0x21:r=x<y?1:0;break;
+    default:r=(x>>>0)<(y>>>0)?1:0;
+   }
    s-=2;D[s++]=r;continue;
   }
   switch(b){
